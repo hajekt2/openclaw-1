@@ -115,43 +115,45 @@ describe("typing controller", () => {
     vi.useRealTimers();
   });
 
-  it("stops only after both run completion and dispatcher idle are set (any order)", async () => {
+  it("stops immediately after run completion", async () => {
     vi.useFakeTimers();
-    const cases = [
-      { name: "run-complete first", first: "run", second: "idle" },
-      { name: "dispatch-idle first", first: "idle", second: "run" },
-    ] as const;
+    const onReplyStart = vi.fn();
+    const typing = createTypingController({
+      onReplyStart,
+      typingIntervalSeconds: 1,
+      typingTtlMs: 30_000,
+    });
 
-    for (const testCase of cases) {
-      const onReplyStart = vi.fn();
-      const typing = createTypingController({
-        onReplyStart,
-        typingIntervalSeconds: 1,
-        typingTtlMs: 30_000,
-      });
+    await typing.startTypingLoop();
+    expect(onReplyStart).toHaveBeenCalledTimes(1);
 
-      await typing.startTypingLoop();
-      expect(onReplyStart, testCase.name).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(onReplyStart).toHaveBeenCalledTimes(3);
 
-      await vi.advanceTimersByTimeAsync(2_000);
-      expect(onReplyStart, testCase.name).toHaveBeenCalledTimes(3);
+    typing.markRunComplete();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(onReplyStart).toHaveBeenCalledTimes(3);
+  });
 
-      if (testCase.first === "run") {
-        typing.markRunComplete();
-      } else {
-        typing.markDispatchIdle();
-      }
-      await vi.advanceTimersByTimeAsync(2_000);
-      expect(onReplyStart, testCase.name).toHaveBeenCalledTimes(5);
+  it("continues typing before run completion even if dispatcher is idle", async () => {
+    vi.useFakeTimers();
+    const onReplyStart = vi.fn();
+    const typing = createTypingController({
+      onReplyStart,
+      typingIntervalSeconds: 1,
+      typingTtlMs: 30_000,
+    });
 
-      if (testCase.second === "run") {
-        typing.markRunComplete();
-      } else {
-        typing.markDispatchIdle();
-      }
-      await vi.advanceTimersByTimeAsync(2_000);
-      expect(onReplyStart, testCase.name).toHaveBeenCalledTimes(5);
-    }
+    await typing.startTypingLoop();
+    expect(onReplyStart).toHaveBeenCalledTimes(1);
+
+    typing.markDispatchIdle();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(onReplyStart).toHaveBeenCalledTimes(3);
+
+    typing.markRunComplete();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(onReplyStart).toHaveBeenCalledTimes(3);
   });
 
   it("does not start typing after run completion", async () => {

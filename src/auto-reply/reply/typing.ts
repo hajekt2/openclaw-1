@@ -159,6 +159,9 @@ export function createTypingController(params: {
     if (sealed) {
       return;
     }
+    if (runComplete) {
+      return;
+    }
     const trimmed = text?.trim();
     if (!trimmed) {
       return;
@@ -172,7 +175,9 @@ export function createTypingController(params: {
 
   const markRunComplete = () => {
     runComplete = true;
-    maybeStopOnIdle();
+    // Stop keepalive immediately when run completes.
+    // Late async callbacks must not prolong typing after final delivery.
+    cleanup();
   };
 
   const markDispatchIdle = () => {
